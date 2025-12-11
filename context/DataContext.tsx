@@ -41,8 +41,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [stocks, setStocks] = useState<StockHolding[]>([]);
   const [isLoadingStocks, setIsLoadingStocks] = useState(false);
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [loadingData, setLoadingData] = useState(true);
-  const [configError, setConfigError] = useState<string | null>(null);
+  // Default loading to true, but check initialization immediately
+  const [loadingData, setLoadingData] = useState(!initializationError);
+  const [configError, setConfigError] = useState<string | null>(initializationError ? initializationError.message : null);
 
   // Monitor Auth State
   useEffect(() => {
@@ -65,8 +66,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setAccounts([]);
         setTransactions([]);
         setStocks([]);
-        setLoadingData(false);
       }
+      // Auth check complete
+      setLoadingData(false);
     });
     return () => unsubscribe();
   }, []);

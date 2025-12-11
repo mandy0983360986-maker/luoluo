@@ -31,6 +31,20 @@ const Login: React.FC = () => {
     }
   }, [configError]);
 
+  useEffect(() => {
+    // Load existing config into form when opening settings
+    if (showConfig) {
+      try {
+        const localConfig = localStorage.getItem('firebase_config');
+        if (localConfig) {
+          setConfigForm(JSON.parse(localConfig));
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [showConfig]);
+
   const handleSaveConfig = (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -66,14 +80,24 @@ const Login: React.FC = () => {
       }
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/invalid-credential') {
+      const errorCode = err.code;
+      const errorMessage = err.message || '';
+
+      if (errorCode === 'auth/invalid-credential') {
         setError('帳號或密碼錯誤');
-      } else if (err.code === 'auth/email-already-in-use') {
+      } else if (errorCode === 'auth/email-already-in-use') {
         setError('此 Email 已被註冊');
-      } else if (err.code === 'auth/weak-password') {
+      } else if (errorCode === 'auth/weak-password') {
         setError('密碼長度需至少 6 個字元');
+      } else if (
+        errorCode === 'auth/invalid-api-key' || 
+        errorCode === 'auth/api-key-not-valid' ||
+        errorMessage.includes('api-key-not-valid')
+      ) {
+        setError('Firebase API Key 無效。請檢查設定。');
+        setShowConfig(true); // Automatically open settings so user can fix it
       } else {
-        setError('登入失敗，請稍後再試: ' + err.message);
+        setError('登入失敗: ' + errorMessage);
       }
     } finally {
       setLoading(false);
@@ -91,7 +115,7 @@ const Login: React.FC = () => {
           </div>
           
           <div className="bg-blue-50 p-4 rounded-xl mb-6 text-sm text-blue-800">
-            檢測到環境變數缺失。請手動輸入 Firebase 專案設定以繼續使用。
+            請輸入正確的 Firebase 專案設定。
             <br />
             <span className="text-xs opacity-75">這些資訊將儲存在您的瀏覽器中。</span>
           </div>
@@ -105,7 +129,7 @@ const Login: React.FC = () => {
                     type="text"
                     required
                     value={(configForm as any)[field]}
-                    onChange={(e) => setConfigForm({...configForm, [field]: e.target.value})}
+                    onChange={(e) => setConfigForm({...configForm, [field]: e.target.value.trim()})}
                     className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
                     placeholder={`Enter ${field}`}
                   />
@@ -114,6 +138,14 @@ const Login: React.FC = () => {
             </div>
             
             <div className="pt-4 flex justify-end space-x-3">
+              <button 
+                type="button" 
+                onClick={handleClearConfig}
+                className="px-4 py-2 text-red-500 hover:bg-red-50 rounded-lg mr-auto text-sm"
+              >
+                清除設定
+              </button>
+
               {configError !== "Firebase Configuration Missing" && (
                 <button 
                   type="button" 
@@ -182,7 +214,7 @@ const Login: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg text-center">
+            <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg text-center break-words">
               {error}
             </div>
           )}
@@ -225,8 +257,8 @@ const Login: React.FC = () => {
           
           <button 
             type="submit" 
-            disabled={loading || !!configError}
-            className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-500/30 flex justify-center items-center ${loading || !!configError ? 'opacity-70 cursor-not-allowed' : ''}`}
+            disabled={loading || (!!configError && configError !== "Firebase Configuration Missing")}
+            className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-500/30 flex justify-center items-center ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
             {loading ? (
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
@@ -240,8 +272,7 @@ const Login: React.FC = () => {
           <button 
             type="button"
             onClick={() => { setIsRegister(!isRegister); setError(''); }}
-            disabled={!!configError}
-            className="text-sm text-slate-500 hover:text-blue-600 transition disabled:opacity-50"
+            className="text-sm text-slate-500 hover:text-blue-600 transition"
           >
             {isRegister ? '已有帳號？點此登入' : '沒有帳號？註冊一個'}
           </button>

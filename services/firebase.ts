@@ -48,6 +48,7 @@ try {
   const config = getFirebaseConfig();
 
   if (!config || !config.apiKey) {
+    // Throwing a specific error that we will catch below
     throw new Error("Firebase Configuration Missing");
   }
 
@@ -61,8 +62,14 @@ try {
   auth = getAuth(app);
   db = getFirestore(app);
 } catch (error: any) {
-  console.error("Firebase Initialization Failed:", error);
-  // Preserve the specific error message
+  // Only log real errors, suppress the configuration missing "error" as it is handled by the UI
+  if (error.message === "Firebase Configuration Missing") {
+    console.warn("Firebase Config: No environment variables or local config found. Waiting for user input.");
+  } else {
+    console.error("Firebase Initialization Failed:", error);
+  }
+  
+  // Preserve the specific error message for the UI
   initializationError = error instanceof Error ? error : new Error(String(error));
 }
 
