@@ -1,8 +1,16 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { StockHolding, StockPriceUpdate } from "../types";
 
+const getEnv = (key: string) => {
+  try {
+    return typeof process !== 'undefined' && process.env ? process.env[key] : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
+  const apiKey = getEnv('API_KEY');
   if (!apiKey) {
     console.warn("Gemini API Key is missing.");
     return null;
