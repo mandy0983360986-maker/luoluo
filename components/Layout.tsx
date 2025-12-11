@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Wallet, TrendingUp, Receipt, PieChart, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Wallet, TrendingUp, Receipt, PieChart, LogOut, Menu, X, AlertTriangle, ExternalLink } from 'lucide-react';
+import { useData } from '../context/DataContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,6 +12,7 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
+  const { firestoreError } = useData();
 
   const navItems = [
     { path: '/', label: '總覽 Dashboard', icon: LayoutDashboard },
@@ -102,6 +104,41 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         {/* Scrollable Content Area */}
         <div className="flex-1 overflow-auto p-4 lg:p-8">
           <div className="max-w-7xl mx-auto space-y-6">
+            
+            {/* Firestore Permissions Error Banner */}
+            {firestoreError && firestoreError.code === 'permission-denied' && (
+              <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg shadow-sm flex items-start">
+                <AlertTriangle className="text-amber-500 mr-3 mt-0.5 flex-shrink-0" size={20} />
+                <div className="flex-1">
+                  <h3 className="font-bold text-amber-800 mb-1">Firestore 權限不足 (Permission Denied)</h3>
+                  <p className="text-amber-700 text-sm mb-3">
+                    應用程式無法讀取或寫入資料庫。請前往 Firebase Console 檢查您的 Firestore Security Rules。
+                  </p>
+                  
+                  <div className="bg-amber-100 p-3 rounded text-xs font-mono text-amber-900 mb-3 overflow-x-auto">
+                    <p className="text-slate-500 mb-1">// 建議的開發用規則 (允許已登入使用者存取)</p>
+                    <pre>{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}`}</pre>
+                  </div>
+                  
+                  <a 
+                    href="https://console.firebase.google.com/" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="inline-flex items-center text-sm font-bold text-amber-700 hover:text-amber-900 underline"
+                  >
+                    前往 Firebase Console <ExternalLink size={14} className="ml-1" />
+                  </a>
+                </div>
+              </div>
+            )}
+            
             {children}
           </div>
         </div>

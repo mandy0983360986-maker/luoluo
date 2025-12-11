@@ -31,6 +31,7 @@ interface DataContextType {
   currentUser: FirebaseUser | null;
   loadingData: boolean;
   configError: string | null;
+  firestoreError: { code: string; message: string } | null;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -44,6 +45,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Default loading to true, but check initialization immediately
   const [loadingData, setLoadingData] = useState(!initializationError);
   const [configError, setConfigError] = useState<string | null>(initializationError ? initializationError.message : null);
+  const [firestoreError, setFirestoreError] = useState<{ code: string; message: string } | null>(null);
 
   // Monitor Auth State
   useEffect(() => {
@@ -66,6 +68,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setAccounts([]);
         setTransactions([]);
         setStocks([]);
+        setFirestoreError(null);
       }
       // Auth check complete
       setLoadingData(false);
@@ -79,13 +82,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     setLoadingData(true);
     const userId = currentUser.uid;
+    setFirestoreError(null);
+
+    const handleSnapshotError = (error: any) => {
+      console.error("Firestore Listener Error:", error);
+      if (error.code === 'permission-denied') {
+        setFirestoreError({
+          code: 'permission-denied',
+          message: '權限不足 (Permission Denied)。請前往 Firebase Console 設定 Firestore Security Rules。'
+        });
+      } else {
+        setFirestoreError({
+          code: error.code || 'unknown',
+          message: error.message || '資料庫連線錯誤'
+        });
+      }
+      setLoadingData(false);
+    };
 
     // Accounts Listener
     const qAccounts = query(collection(db, 'accounts'), where("userId", "==", userId));
     const unsubscribeAccounts = onSnapshot(qAccounts, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BankAccount));
       setAccounts(data);
-    });
+    }, handleSnapshotError);
 
     // Transactions Listener
     const qTransactions = query(collection(db, 'transactions'), where("userId", "==", userId));
@@ -93,7 +113,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Sort locally or add orderBy index in Firestore
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
       setTransactions(data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-    });
+    }, handleSnapshotError);
 
     // Stocks Listener
     const qStocks = query(collection(db, 'stocks'), where("userId", "==", userId));
@@ -101,7 +121,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StockHolding));
       setStocks(data);
       setLoadingData(false);
-    });
+    }, handleSnapshotError);
 
     return () => {
       unsubscribeAccounts();
@@ -216,7 +236,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isLoadingStocks,
       currentUser,
       loadingData,
-      configError
+      configError,
+      firestoreError
     }}>
       {children}
     </DataContext.Provider>
