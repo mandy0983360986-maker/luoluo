@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { BankAccount, Transaction, StockHolding, TransactionType } from '../types';
 import { fetchStockPrices } from '../services/geminiService';
-import { db, auth } from '../services/firebase';
+import { db, auth, initializationError } from '../services/firebase';
 import { 
   collection, 
   addDoc, 
@@ -30,6 +30,7 @@ interface DataContextType {
   isLoadingStocks: boolean;
   currentUser: FirebaseUser | null;
   loadingData: boolean;
+  configError: string | null;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -41,9 +42,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoadingStocks, setIsLoadingStocks] = useState(false);
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [loadingData, setLoadingData] = useState(true);
+  const [configError, setConfigError] = useState<string | null>(null);
 
   // Monitor Auth State
   useEffect(() => {
+    if (initializationError) {
+      setConfigError(initializationError.message);
+      setLoadingData(false);
+      return;
+    }
+
+    if (!auth) {
+      setConfigError("Firebase auth service not available.");
+      setLoadingData(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       if (!user) {
@@ -59,7 +73,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Real-time Data Listeners
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
 
     setLoadingData(true);
     const userId = currentUser.uid;
@@ -95,23 +109,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [currentUser]);
 
   const addAccount = async (account: Omit<BankAccount, 'id'>) => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     await addDoc(collection(db, 'accounts'), { ...account, userId: currentUser.uid });
   };
 
   const deleteAccount = async (id: string) => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     await deleteDoc(doc(db, 'accounts', id));
   };
 
   const updateAccount = async (updated: BankAccount) => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     const { id, ...data } = updated;
     await updateDoc(doc(db, 'accounts', id), data as any);
   };
 
   const addTransaction = async (transaction: Omit<Transaction, 'id'>) => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     
     // Create a batch to update transaction and account balance atomically
     const batch = writeBatch(db);
@@ -132,7 +146,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const deleteTransaction = async (id: string) => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     const tx = transactions.find(t => t.id === id);
     if (!tx) return;
 
@@ -154,17 +168,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const addStock = async (stock: Omit<StockHolding, 'id'>) => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     await addDoc(collection(db, 'stocks'), { ...stock, userId: currentUser.uid });
   };
 
   const deleteStock = async (id: string) => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     await deleteDoc(doc(db, 'stocks', id));
   };
 
   const updateStockPrices = async () => {
-    if (!currentUser || stocks.length === 0) return;
+    if (!currentUser || !db || stocks.length === 0) return;
     setIsLoadingStocks(true);
     try {
       const updates = await fetchStockPrices(stocks);
@@ -199,7 +213,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       updateStockPrices,
       isLoadingStocks,
       currentUser,
-      loadingData
+      loadingData,
+      configError
     }}>
       {children}
     </DataContext.Provider>
